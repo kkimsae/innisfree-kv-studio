@@ -1,0 +1,44 @@
+{
+  "name": "innisfree-kv-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "월간 히어로 키비주얼을 확정 자산으로 구성하는 로컬 스튜디오",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,web -c green,blue \"tsx watch src/server/main.ts\" \"vite --host 127.0.0.1\"",
+    "start": "tsx src/server/main.ts",
+    "build": "vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.2.0",
+    "better-sqlite3": "^13.2.0",
+    "express": "^5.3.0",
+    "fflate": "^0.8.3",
+    "multer": "^2.5.0",
+    "openai": "^7.62.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.5.438",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sharp": "^0.35.5",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "concurrently": "^10.0.7",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  }
+}
