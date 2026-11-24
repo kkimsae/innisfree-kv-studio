@@ -51,7 +51,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export function getStatus() {
-  return request<{ aiConfigured: boolean; missing: string[]; models: Record<string, string> }>("/api/status");
+  return request<{ configured: boolean; requiredEnv: string[]; visionModel: string; planningModel: string; imageModel: string }>("/api/status");
 }
 
 export function listProjects() {

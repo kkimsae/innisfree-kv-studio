@@ -88,6 +88,23 @@ h2 { font-size: 15px; margin: 0 0 12px; }
 .stage-toolbar, .history { display: flex; gap: 8px; align-items: center; padding: 10px 12px; }
 .preview-wrap { position: relative; flex: 1; min-height: 0; margin: 0 16px 16px; }
 .preview-wrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #d9d3c9; border-radius: 12px; }
+.empty-stage {
+  position: absolute;
+  inset: 16px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px;
+  border-radius: 12px;
+  background: rgba(251, 250, 247, 0.94);
+  border: 1px dashed #cfc6b8;
+}
+.empty-stage h2 { font-size: 22px; }
+.empty-stage ol { margin: 0; padding-left: 18px; }
+.steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.steps .done { color: #1f6b45; }
 .hit {
   position: absolute;
   border: 1px solid transparent;
@@ -148,7 +165,9 @@ h2 { font-size: 15px; margin: 0 0 12px; }
   .home, .workspace, .mapper { grid-template-columns: 1fr; }
   .home { padding: 18px; }
   .studio { height: auto; grid-template-rows: auto auto; }
-  .preview-wrap { min-height: 360px; }
+  .workspace { display: flex; flex-direction: column; }
+  .stage { order: -1; min-height: 460px; }
+  .preview-wrap { height: 320px; flex: none; }
   .topbar { flex-wrap: wrap; height: auto; min-height: 58px; padding: 8px 12px; }
   .project-name { display: none; }
 }

@@ -41,7 +41,7 @@ export function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [bundle, setBundle] = useState<Bundle | null>(null);
-  const [status, setStatus] = useState<{ aiConfigured?: boolean; missing?: string[] } | null>(null);
+  const [status, setStatus] = useState<{ configured?: boolean; requiredEnv?: string[] } | null>(null);
   const [save, setSave] = useState("대기");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -49,7 +49,7 @@ export function App() {
   useEffect(() => onSaveState((state) => setSave(state === "saving" ? "저장 중" : state === "saved" ? "저장됨" : state === "error" ? "저장 실패" : "대기")), []);
   useEffect(() => {
     void refreshHome();
-    void getStatus().then((value) => setStatus(value as { aiConfigured?: boolean; missing?: string[] })).catch(() => undefined);
+    void getStatus().then((value) => setStatus(value)).catch(() => undefined);
   }, []);
 
   async function refreshHome() {
@@ -178,7 +178,7 @@ function Home({ projects, error, onError, onOpen, onOpenId }: {
 
 function Studio({ bundle, status, error, notice, onError, onNotice, onBundle }: {
   bundle: Bundle;
-  status: { aiConfigured?: boolean; missing?: string[] } | null;
+  status: { configured?: boolean; requiredEnv?: string[] } | null;
   error: string;
   notice: string;
   onError: (value: string) => void;
@@ -204,6 +204,14 @@ function Studio({ bundle, status, error, notice, onError, onNotice, onBundle }: 
   useEffect(() => {
     void getPlan(project.id).then((result) => setPlan(result.plan)).catch(() => undefined);
   }, [project.id, project.items, project.outputWidth, project.outputHeight]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void renderProject(project.id).then(() => {
+      if (!cancelled) setStamp(Date.now());
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [project.id]);
 
   const selectedItem = project.items.find((item) => item.id === selected) ?? null;
 
@@ -290,8 +298,6 @@ function Studio({ bundle, status, error, notice, onError, onNotice, onBundle }: 
             <button className={tab === "sets" ? "active" : ""} onClick={() => setTab("sets")}>구색</button>
             <button className={tab === "assets" ? "active" : ""} onClick={() => setTab("assets")}>자료</button>
           </div>
-          {error && <p className="error">{error}</p>}
-          {notice && <p className="banner">{notice}</p>}
           {tab === "sets" ? (
             <Sets bundle={bundle} onBundle={onBundle} onError={onError} onMap={() => setMapper(true)} />
           ) : (
@@ -300,8 +306,21 @@ function Studio({ bundle, status, error, notice, onError, onNotice, onBundle }: 
         </aside>
         <section className="stage">
           {project.demo && <div className="banner" style={{ margin: "12px 16px 0" }}>데모 예시입니다. 승인된 이니스프리 아트워크가 아닙니다.</div>}
+          {(error || notice) && <div style={{ margin: "12px 16px 0" }}>{error && <p className="error">{error}</p>}{notice && <p className="banner">{notice}</p>}</div>}
           <div className="stage-toolbar">
-            <button className="primary" onClick={() => void run(() => layoutScene(project.id))}>구색 기준으로 배치</button>
+            <button className="primary" onClick={() => {
+              const rows = project.sets.reduce((count, set) => count + set.rows.length, 0);
+              if (rows === 0) {
+                onError("배치할 구색이 없습니다. 세트를 추가하고 제품 수량을 넣어 주세요.");
+                setTab("sets");
+                return;
+              }
+              void run(async () => {
+                const result = await layoutScene(project.id);
+                onNotice("");
+                return result;
+              });
+            }}>구색 기준으로 배치</button>
             <button className="ghost" onClick={() => void render()}>미리보기</button>
             <label className="ghost">배경 올리기
               <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => {
@@ -318,6 +337,32 @@ function Studio({ bundle, status, error, notice, onError, onNotice, onBundle }: 
           </div>
           {progress > 0 && progress < 1 && <div className="progress"><span style={{ width: `${progress * 100}%` }} /></div>}
           <div className="preview-wrap">
+            {project.items.length === 0 && (
+              <div className="empty-stage">
+                <h2>장면에 올라간 제품이 없습니다</h2>
+                <ol>
+                  <li>제품 사진이나 박스 PDF를 올립니다.</li>
+                  <li>세트를 만들고 보이는 수량을 넣습니다.</li>
+                  <li>구색 기준으로 배치를 누르면 히어로가 그려집니다.</li>
+                </ol>
+                <div className="button-row">
+                  <label className="primary">제품 올리기
+                    <input type="file" hidden accept="image/png,image/jpeg,image/webp,application/pdf,.pdf" onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (!file) return;
+                      void uploadAsset(file, setProgress).then(async () => {
+                        onBundle((await getProject(project.id)).bundle);
+                        onNotice(`${file.name} 파일을 올렸습니다. 구색에 수량을 넣어 주세요.`);
+                        onError("");
+                        setTab("sets");
+                      }).catch((reason) => onError(messageOf(reason)));
+                    }} />
+                  </label>
+                  <button className="ghost" onClick={() => setTab("sets")}>구색 입력</button>
+                </div>
+              </div>
+            )}
             <img ref={image} src={`/api/projects/${project.id}/preview.png?t=${stamp}`} alt="히어로 미리보기" onError={(event) => { (event.target as HTMLImageElement).style.visibility = "hidden"; }} onLoad={(event) => { (event.target as HTMLImageElement).style.visibility = "visible"; }} />
             {plan && image.current && plan.items.map((item) => (
               <button
@@ -445,12 +490,17 @@ function Sets({ bundle, onBundle, onError, onMap }: { bundle: Bundle; onBundle: 
   async function act(work: () => Promise<{ bundle: Bundle }>) {
     try { onBundle((await work()).bundle); } catch (reason) { onError(messageOf(reason)); }
   }
+  async function addSet() {
+    const displayName = name.trim() || "새 세트";
+    await act(() => createSet(bundle.project.id, displayName));
+    setName("");
+  }
   return (
     <div className="stack">
       <button className="ghost" onClick={onMap}>박스 PDF 매핑</button>
       <div className="button-row">
         <input value={name} placeholder="세트 이름" onChange={(event) => setName(event.target.value)} />
-        <button className="primary" onClick={() => void act(() => createSet(bundle.project.id, name))}>추가</button>
+        <button className="primary" onClick={() => void addSet()}>추가</button>
       </div>
       {bundle.project.sets.map((set) => (
         <article key={set.id} className="card" style={{ padding: 10 }}>
@@ -524,7 +574,7 @@ function Assets({ assets, progress, onProgress, onChanged, onError }: { assets: 
 
 function PlanPanel({ bundle, status, job, onAnalyze, onConcepts, onBackground, onApply, onCancel }: {
   bundle: Bundle;
-  status: { aiConfigured?: boolean; missing?: string[] } | null;
+  status: { configured?: boolean; requiredEnv?: string[] } | null;
   job: Job | null;
   onAnalyze: () => void;
   onConcepts: () => void;
@@ -532,10 +582,17 @@ function PlanPanel({ bundle, status, job, onAnalyze, onConcepts, onBackground, o
   onApply: (id: string) => void;
   onCancel: () => void;
 }) {
-  const ai = status?.aiConfigured;
+  const ai = status?.configured;
+  const productCount = bundle.assets.filter((asset) => asset.mediaType === "product" || asset.mediaType === "pdf").length;
+  const rowCount = bundle.project.sets.reduce((count, set) => count + set.rows.length, 0);
   return (
     <div className="stack">
-      {!ai && <p className="banner">AI 기능은 OPENAI_API_KEY가 있어야 합니다. 배치, 배경 업로드, 수정, 내보내기는 그대로 사용할 수 있습니다.</p>}
+      <ol className="steps">
+        <li className={productCount ? "done" : ""}>자료 {productCount}개</li>
+        <li className={rowCount ? "done" : ""}>구색 {rowCount}행</li>
+        <li className={bundle.project.items.length ? "done" : ""}>장면 {bundle.project.items.length}개</li>
+      </ol>
+      {!ai && <p className="banner">분석, 콘셉트, 배경 생성은 OPENAI_API_KEY가 있어야 켜집니다. 파일 업로드, 수량 배치, 배경 업로드, 수정, 내보내기는 지금 사용할 수 있습니다.</p>}
       <button className="ghost" disabled={!ai || job?.status === "running"} onClick={onAnalyze}>패키지 분석</button>
       <button className="ghost" disabled={!ai || job?.status === "running"} onClick={onConcepts}>콘셉트 제안</button>
       <button className="ghost" disabled={!ai || job?.status === "running"} onClick={onBackground}>배경만 생성</button>
@@ -598,7 +655,7 @@ function ScenePanel({ project, item, prompt, onPrompt, onPatch, onProject, onRev
 
 function ReviewPanel({ report, status, onValidate, onReview, onExport }: {
   report: ValidationReport | null;
-  status: { aiConfigured?: boolean } | null;
+  status: { configured?: boolean } | null;
   onValidate: () => Promise<void>;
   onReview: () => void;
   onExport: (format: string) => void;
@@ -606,7 +663,7 @@ function ReviewPanel({ report, status, onValidate, onReview, onExport }: {
   return (
     <div className="stack">
       <button className="primary" onClick={() => void onValidate()}>구성 검증</button>
-      <button className="ghost" disabled={!status?.aiConfigured} onClick={onReview}>시각 리뷰</button>
+      <button className="ghost" disabled={!status?.configured} onClick={onReview}>시각 리뷰</button>
       {report && (
         <article className="card" style={{ padding: 10 }}>
           <strong>{report.passed ? "구성 오류 없음" : "수정이 필요합니다"}</strong>
